@@ -1,0 +1,31 @@
+# Build and dependency output
+backend/target/
+frontend/node_modules/
+frontend/dist/
+.m2/
+
+# Local runtime data
+backend/data/
+*.db
+*.db-shm
+*.db-wal
+
+# Local tooling
+.idea/
+.vscode/
+*.iml
+.impeccable/
+
+# Preserve the supplied planning pack locally, but do not commit it.
+/.agents/
+/AGENTS.md
+/00_PROJECT_CONTEXT.md
+/01_PRD.md
+/02_SRS.md
+/03_TAD.md
+/04_TRD.md
+/05_UI_UX_BRIEF.md
+/06_FSD.md
+/07_API_DOCS.md
+/WISEWAY_CODEX_GUIDE.md
+/WiseWay_Project_Documentation.docx

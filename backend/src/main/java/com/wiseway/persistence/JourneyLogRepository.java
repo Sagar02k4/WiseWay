@@ -1,0 +1,1 @@
+package com.wiseway.persistence; import org.springframework.data.jpa.repository.JpaRepository; import java.time.LocalDate; import java.util.*; public interface JourneyLogRepository extends JpaRepository<JourneyLogEntity,Long> { List<JourneyLogEntity> findByTravelDateBetweenOrderByTravelDateDesc(LocalDate from,LocalDate to); }
