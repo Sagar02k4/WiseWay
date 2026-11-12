@@ -34,7 +34,7 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
     if (from.isEmpty() || to.isEmpty() || from.get().index() >= to.get().index()) return Optional.empty();
     var geometry = route.geometryBetween(from.get().index(), to.get().index());
     if (geometry.isEmpty()) return Optional.empty();
-    return Optional.of(new Itinerary(List.of(new Leg(route.mode, route.name, from.get().name, to.get().name, 0, geometry)), "OSM_RELATIONS_NO_SCHEDULE", Instant.now()));
+    return Optional.of(new Itinerary(List.of(new Leg(route.mode, route.name, from.get().name(), to.get().name(), 0, geometry)), "OSM_RELATIONS_NO_SCHEDULE", Instant.now()));
   }
 
   private Optional<StopMatch> nearest(List<Stop> stops, double lat, double lon) {
