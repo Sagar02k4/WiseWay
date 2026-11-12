@@ -63,6 +63,17 @@ $env:WISEWAY_ROUTING_TIMEOUT_MS="5000"
 
 OSRM must be supplied with the map data and profile appropriate for the region. A public demonstration endpoint is suitable only for limited manual testing; it is not a production dependency. WiseWay returns `NO_ROUTE` when OSRM fails or returns no route and does not substitute straight-line or fabricated distance.
 
+### Geocoding provider
+
+The default location search uses the bundled demo catalog. For provider-backed search, configure Photon:
+
+```powershell
+$env:WISEWAY_GEOCODING_PROVIDER="photon"
+$env:WISEWAY_PHOTON_BASE_URL="https://photon.komoot.io"
+```
+
+Photon results include a display name, context, latitude and longitude. Use reasonable request rates, cache repeated searches, and provide OpenStreetMap/Photon attribution in deployments. The public Photon demo service is not guaranteed production infrastructure. WiseWay does not use public Nominatim autocomplete.
+
 ## Test and build
 
 ```powershell
