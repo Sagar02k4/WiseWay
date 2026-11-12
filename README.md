@@ -90,7 +90,9 @@ When OSRM is enabled, Compare sends the selected coordinates to OSRM and renders
 
 ### Transit-data status
 
-The Delhi Open Transit Data portal publishes GTFS bus data, and Delhi transit-data catalogs also describe static metro datasets. Coverage, freshness, licensing, and route-shape availability must be verified per feed before enabling transit geometry. WiseWay does not currently bundle a GTFS feed or claim verified Bus/Metro/Train geometry for Gurugram or Rohtak; those modes remain illustrative/unknown when no genuine transit provider supplies a route. A future OpenTripPlanner/GTFS adapter should remain behind a `TransitRoutingProvider` abstraction.
+The Delhi Open Transit Data documentation identifies a GTFS bus dataset with `agency`, `calendar`, `stops`, `routes`, `trips`, and `stop_times`; it warns that bus times are rough constant-speed estimates. Its static page reports 3,464 stops, 543 routes, 16,562 trips, and a June 20, 2024 update. The DMRC static page reports 262 stations, 36 routes, 17,997 trips, and an August 10, 2023 update. Both download pages require a purpose/contact form and terms acceptance before downloading the ZIP, so those feeds were not downloaded or validated in this environment.
+
+WiseWay therefore does not claim verified Bus/Metro/Train geometry for Gurugram or Rohtak, and does not bundle a feed with uncertain licensing or freshness. The backend now exposes a `TransitRoutingProvider` seam for a validated GTFS/OpenTripPlanner deployment. OTP is the proposed adapter because it builds multimodal itineraries from GTFS and OpenStreetMap data, but no OTP instance or validated feed is configured locally. Until then, transit modes remain illustrative/unknown and show no transit map rather than fabricated geometry.
 
 ## Test and build
 
