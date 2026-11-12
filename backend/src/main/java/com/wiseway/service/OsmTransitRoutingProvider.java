@@ -28,6 +28,14 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
     return Optional.empty(); // Crossing lines is not treated as a transfer without a shared mapped stop.
   }
 
+  public List<LocationService.Location> searchStops(String query) {
+    if (query == null || query.isBlank()) return List.of();
+    var q = query.trim().toLowerCase(Locale.ROOT);
+    return routes.stream().flatMap(r -> r.stops.stream()).filter(s -> s.name.toLowerCase(Locale.ROOT).contains(q))
+        .map(s -> new LocationService.Location("osm-stop-" + s.id, s.name, "OSM transit stop · " + s.mode, s.lat, s.lon))
+        .distinct().sorted(Comparator.comparing(LocationService.Location::name).thenComparing(LocationService.Location::id)).limit(12).toList();
+  }
+
   private Optional<Itinerary> direct(Route route, LocationService.Location origin, LocationService.Location destination) {
     var from = nearest(route.stops, origin.latitude(), origin.longitude());
     var to = nearest(route.stops, destination.latitude(), destination.longitude());
@@ -53,10 +61,10 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
         if (!n.path("completeGeometry").asBoolean(false)) continue;
         var mode = switch (n.path("route").asText()) { case "bus" -> TransportMode.BUS; case "subway", "light_rail", "monorail" -> TransportMode.METRO; case "train" -> TransportMode.TRAIN; default -> null; };
         if (mode == null) continue;
-        var stops = new ArrayList<Stop>(); for (var s : n.path("stops")) stops.add(new Stop(s.path("name").asText("Unnamed stop"), s.path("latitude").asDouble(), s.path("longitude").asDouble(), -1));
+        var stops = new ArrayList<Stop>(); for (var s : n.path("stops")) stops.add(new Stop(s.path("id").asLong(), s.path("name").asText("Unnamed stop"), s.path("latitude").asDouble(), s.path("longitude").asDouble(), mode.name(), -1));
         if (stops.size() < 2) continue;
         // The extractor preserves stop order in the route's ordered member-node sequence.
-        for (int i=0;i<stops.size();i++) stops.set(i, new Stop(stops.get(i).name, stops.get(i).lat, stops.get(i).lon, i));
+        for (int i=0;i<stops.size();i++) stops.set(i, new Stop(stops.get(i).id, stops.get(i).name, stops.get(i).lat, stops.get(i).lon, stops.get(i).mode, i));
         var geometry = mapper.writeValueAsString(Map.of("type", "LineString", "coordinates", n.path("geometry")));
         result.add(new Route(mode, n.path("name").asText("Unnamed mapped route"), stops, geometry));
       }
@@ -73,7 +81,7 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
     }
   }
 
-  private record Stop(String name, double lat, double lon, int index) {}
+  private record Stop(long id, String name, double lat, double lon, String mode, int index) {}
   private record StopMatch(Stop stop, double distance) { int index(){ return stop.index; } String name(){ return stop.name; } }
   private record Route(TransportMode mode, String name, List<Stop> stops, String geometry) {
     String geometryBetween(int from, int to) { return geometry; }
