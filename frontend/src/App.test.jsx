@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { vi, describe, it, expect } from 'vitest';
 import { App } from './main.jsx';
 
-vi.mock('./api', () => ({ api: { routes: vi.fn().mockResolvedValue([]), logs: vi.fn().mockResolvedValue([]) } }));
+vi.mock('./api', () => ({ api: { routes: vi.fn().mockResolvedValue([]), logs: vi.fn().mockResolvedValue([]), health: vi.fn().mockResolvedValue({ routingProvider: 'curated' }) } }));
 
 describe('WiseWay shell', () => {
   it('shows the overview and honest demo disclosure', async () => {

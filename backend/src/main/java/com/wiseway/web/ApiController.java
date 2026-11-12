@@ -1,7 +1,7 @@
 package com.wiseway.web;
-import com.wiseway.api.ApiDtos.*; import com.wiseway.service.*; import jakarta.validation.Valid; import org.springframework.http.*; import org.springframework.web.bind.annotation.*; import java.time.*; import java.util.*;
-@RestController @RequestMapping("/api/v1") public class ApiController { private final RecommendationService rec; private final SavedRouteService routes; private final ExpenseService expenses; private final GeocodingService geocoding; public ApiController(RecommendationService r,SavedRouteService s,ExpenseService e,GeocodingService g){rec=r;routes=s;expenses=e;geocoding=g;}
- @GetMapping("/health") public Map<String,String> health(){return Map.of("status","UP","application","WiseWay");}
+import com.wiseway.api.ApiDtos.*; import com.wiseway.service.*; import jakarta.validation.Valid; import org.springframework.beans.factory.annotation.Value; import org.springframework.http.*; import org.springframework.web.bind.annotation.*; import java.time.*; import java.util.*;
+@RestController @RequestMapping("/api/v1") public class ApiController { private final RecommendationService rec; private final SavedRouteService routes; private final ExpenseService expenses; private final GeocodingService geocoding; @Value("${wiseway.routing.provider:curated}") private String routingProvider; public ApiController(RecommendationService r,SavedRouteService s,ExpenseService e,GeocodingService g){rec=r;routes=s;expenses=e;geocoding=g;}
+ @GetMapping("/health") public Map<String,String> health(){return Map.of("status","UP","application","WiseWay","routingProvider",routingProvider);}
  @GetMapping("/locations/search") public List<LocationResponse> locations(@RequestParam String q){return geocoding.search(q).stream().map(x->new LocationResponse(x.id(),x.name(),x.context(),x.latitude(),x.longitude())).toList();}
  @PostMapping("/recommendations/compare") public CompareResponse compare(@Valid @RequestBody CompareRequest r){return rec.compare(r,Set.of());}
  @PostMapping("/recommendations/plan-b") public PlanBResponse planB(@Valid @RequestBody PlanBRequest r){return rec.planB(r);}
