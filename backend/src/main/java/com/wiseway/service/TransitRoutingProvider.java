@@ -9,4 +9,7 @@ public interface TransitRoutingProvider {
   record Leg(TransportMode mode, String routeName, String fromStop, String toStop, int durationSeconds, String geometryGeoJson) {}
   record Itinerary(List<Leg> legs, String source, Instant feedTimestamp) {}
   Optional<Itinerary> route(LocationService.Location origin, LocationService.Location destination, Set<TransportMode> modes);
+  default List<Itinerary> journeys(LocationService.Location origin, LocationService.Location destination, Set<TransportMode> modes) {
+    return route(origin, destination, modes).stream().toList();
+  }
 }
