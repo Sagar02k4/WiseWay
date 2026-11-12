@@ -10,6 +10,7 @@ WiseWay is a local-first commute companion for comparing illustrative transport 
 - Java 21/Spring Boot REST API under `/api/v1`.
 - SQLite persistence for saved routes and actual journey logs.
 - Location search, configurable routing providers, route-specific distance/duration, and mode-specific fare estimates.
+- Compare displays returned road geometry on an OpenStreetMap/Leaflet map when the routing provider supplies it.
 - Deterministic recommendation engine with Budget Saver, Time Saver, Comfort First, and Balanced profiles.
 - Fare/deadline hard constraints, stable tie-breaking, explanations, and explicit no-fit results.
 - Narrow local-development CORS and consistent validation/not-found/server errors.
@@ -73,6 +74,8 @@ $env:WISEWAY_PHOTON_BASE_URL="https://photon.komoot.io"
 ```
 
 Photon results include a display name, context, latitude and longitude. Use reasonable request rates, cache repeated searches, and provide OpenStreetMap/Photon attribution in deployments. The public Photon demo service is not guaranteed production infrastructure. WiseWay does not use public Nominatim autocomplete.
+
+When OSRM is enabled, Compare sends the selected coordinates to OSRM and renders its returned GeoJSON route geometry. The map does not represent live traffic or public-transport availability. Curated demo routes without geometry show a clear unavailable-map state rather than a fabricated straight line.
 
 ## Test and build
 
