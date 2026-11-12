@@ -28,6 +28,15 @@ cd backend
 mvn spring-boot:run
 ```
 
+On Windows, if `mvn` resolves to a Python package and fails with `ModuleNotFoundError: No module named 'pwd'`, that is a PATH collision unrelated to WiseWay. Use a real Apache Maven installation instead:
+
+```powershell
+cd backend
+.\mvnw.cmd spring-boot:run
+```
+
+Alternatively set `MAVEN_HOME` to your Apache Maven directory and run `mvnw.cmd`. Do not use the Python `mvn.exe` shim.
+
 The API starts on `http://localhost:8080`; SQLite is created at `backend/data/wiseway.db`.
 
 ## Run the frontend
