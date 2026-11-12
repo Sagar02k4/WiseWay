@@ -1,9 +1,9 @@
 package com.wiseway.service;
 
-import java.util.*; import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import java.util.*; import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
-@Service @ConditionalOnMissingBean(RoutingProvider.class)
+@Service @ConditionalOnProperty(name="wiseway.routing.provider",havingValue="curated",matchIfMissing=true)
 public class RouteDataService implements RoutingProvider {
   public record RouteProfile(int roadDistanceMetres, int roadDurationSeconds, Set<String> verifiedTransitModes) {}
   private final Map<String, RouteProfile> routes = Map.of(
