@@ -1,8 +1,8 @@
 package com.wiseway.service;
-import com.wiseway.api.ApiDtos.*; import com.wiseway.domain.*; import java.util.*; import org.springframework.stereotype.Service;
+import com.wiseway.api.ApiDtos.*; import com.wiseway.domain.*; import java.util.*; import org.springframework.stereotype.Service; import org.springframework.beans.factory.annotation.Autowired;
 @Service public class RecommendationService {
  private final LocationService catalog; private final RoutingProvider routing; private final FareCalculationService fares; private final TransitRoutingProvider transit;
- public RecommendationService(LocationService c,RoutingProvider r,FareCalculationService f,TransitRoutingProvider t){catalog=c;routing=r;fares=f;transit=t;}
+ @Autowired public RecommendationService(LocationService c,RoutingProvider r,FareCalculationService f,TransitRoutingProvider t){catalog=c;routing=r;fares=f;transit=t;}
  public RecommendationService(LocationService c,RoutingProvider r,FareCalculationService f){this(c,r,f,(a,b,m)->Optional.empty());}
  public CompareResponse compare(CompareRequest r,Set<String> excluded){
   var from=location(r.origin(),r.originLatitude(),r.originLongitude()); var to=location(r.destination(),r.destinationLatitude(),r.destinationLongitude());
