@@ -9,11 +9,12 @@ WiseWay is a local-first commute companion for comparing illustrative transport 
 - React/Vite responsive web app with Overview, Compare, Plan B, Saved routes, and Expenses views.
 - Java 21/Spring Boot REST API under `/api/v1`.
 - SQLite persistence for saved routes and actual journey logs.
+- Location search, configurable routing providers, route-specific distance/duration, and mode-specific fare estimates.
 - Deterministic recommendation engine with Budget Saver, Time Saver, Comfort First, and Balanced profiles.
 - Fare/deadline hard constraints, stable tie-breaking, explanations, and explicit no-fit results.
 - Narrow local-development CORS and consistent validation/not-found/server errors.
 
-All transport durations and fares are curated sample estimates. They are not live schedules, traffic, service status, route guarantees, or ticket prices. Plan B is a local simulation, not a live disruption alert.
+OSRM can be configured for road distance and duration. Public transport availability and fares remain unknown unless the configured dataset verifies them. Formula-based fares are explicitly estimates, not official prices. Plan B is a local simulation, not a live disruption alert.
 
 ## Prerequisites
 
@@ -49,6 +50,19 @@ npm run dev
 
 Open `http://localhost:5173`. Set `VITE_API_URL` if the backend uses a different base URL.
 
+### Routing provider
+
+The default provider is the local curated demo route catalog. To use a local OSRM instance, configure the backend before starting it:
+
+```powershell
+$env:WISEWAY_ROUTING_PROVIDER="osrm"
+$env:WISEWAY_OSRM_BASE_URL="http://localhost:5000"
+$env:WISEWAY_ROUTING_TIMEOUT_MS="5000"
+.\mvnw.cmd spring-boot:run
+```
+
+OSRM must be supplied with the map data and profile appropriate for the region. A public demonstration endpoint is suitable only for limited manual testing; it is not a production dependency. WiseWay returns `NO_ROUTE` when OSRM fails or returns no route and does not substitute straight-line or fabricated distance.
+
 ## Test and build
 
 ```powershell
@@ -64,6 +78,7 @@ npm run build
 ## API overview
 
 - `GET /api/v1/health`
+- `GET /api/v1/locations/search?q=...`
 - `POST /api/v1/recommendations/compare`
 - `POST /api/v1/recommendations/plan-b`
 - `GET|POST|PUT|DELETE /api/v1/saved-routes`
@@ -84,4 +99,4 @@ For an internship demo, record: Overview → Compare with a profile/budget chang
 
 ## Limitations
 
-This is intentionally a single-user local MVP. It does not provide authentication, live routing, GPS, official transit data, bookings, payments, or cloud synchronization.
+This is intentionally a single-user local MVP. Location search currently uses the bundled demo catalog; OSRM routing is opt-in and requires a separately managed OSRM service. It does not provide GPS, official transit feeds/fares, bookings, payments, or cloud synchronization. OSM/OSRM users must follow the applicable attribution and service-use policies.

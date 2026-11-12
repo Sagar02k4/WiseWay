@@ -1,6 +1,7 @@
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1';
 async function request(path, options = {}) { const res = await fetch(`${BASE}${path}`, { headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, ...options }); if (!res.ok) { let body = {}; try { body = await res.json(); } catch {} throw new Error(body.message || 'The WiseWay service is unavailable. Try again.'); } return res.status === 204 ? null : res.json(); }
 export const api = {
+  searchLocations: (query) => request(`/locations/search?q=${encodeURIComponent(query)}`),
   compare: (body) => { let saved = {}; try { saved = JSON.parse(sessionStorage.getItem('wiseway-journey') || '{}'); } catch {} return request('/recommendations/compare', { method: 'POST', body: JSON.stringify({ ...body, ...saved }) }); },
   planB: (body) => request('/recommendations/plan-b', { method: 'POST', body: JSON.stringify(body) }), routes: () => request('/saved-routes'), createRoute: (body) => request('/saved-routes', { method: 'POST', body: JSON.stringify(body) }), updateRoute: (id, body) => request(`/saved-routes/${id}`, { method: 'PUT', body: JSON.stringify(body) }), deleteRoute: (id) => request(`/saved-routes/${id}`, { method: 'DELETE' }), logs: () => request('/journey-logs'), createLog: (body) => request('/journey-logs', { method: 'POST', body: JSON.stringify(body) }), deleteLog: (id) => request(`/journey-logs/${id}`, { method: 'DELETE' }), summary: (from, to) => request(`/expenses/summary?from=${from}&to=${to}&groupBy=MODE`)
 };
