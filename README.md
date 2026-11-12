@@ -88,6 +88,18 @@ Photon results include a display name, context, latitude and longitude. Use reas
 
 When OSRM is enabled, Compare sends the selected coordinates to OSRM and renders its returned GeoJSON route geometry. The map does not represent live traffic or public-transport availability. Curated demo routes without geometry show a clear unavailable-map state rather than a fabricated straight line.
 
+### Transit-data import tooling
+
+The reproducible offline import tooling is in `backend/scripts/transit`. Download the Geofabrik Northern Zone extract with resumable HTTP ranges (the raw PBF is intentionally gitignored):
+
+```powershell
+cd backend
+.\scripts\transit\Download-NorthernZone.ps1
+.\.venv\Scripts\python.exe scripts/transit/extract_osm_transit.py data/transit/raw/northern-zone-latest.osm.pbf --output data/transit/normalized/ncr-transit.json
+```
+
+Create the processing environment with `py -3.12 -m venv .venv` and install the `osmium` Python binding with `.\venv\Scripts\python.exe -m pip install osmium`. The extractor is offline, preserves OSM relation/member IDs and ordering, filters to a Delhi-NCR envelope, and reports route/station coverage. It does not use Overpass or infer passenger service from arbitrary railway tracks.
+
 ### Transit-data status
 
 The Delhi Open Transit Data documentation identifies a GTFS bus dataset with `agency`, `calendar`, `stops`, `routes`, `trips`, and `stop_times`; it warns that bus times are rough constant-speed estimates. Its static page reports 3,464 stops, 543 routes, 16,562 trips, and a June 20, 2024 update. The DMRC static page reports 262 stations, 36 routes, 17,997 trips, and an August 10, 2023 update. Both download pages require a purpose/contact form and terms acceptance before downloading the ZIP, so those feeds were not downloaded or validated in this environment.

@@ -3,6 +3,7 @@ backend/target/
 frontend/node_modules/
 frontend/dist/
 .m2/
+backend/.venv/
 
 # Local runtime data
 backend/data/
