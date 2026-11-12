@@ -7,7 +7,12 @@ import com.wiseway.api.ApiDtos.*; import com.wiseway.domain.*; import java.util.
  public CompareResponse compare(CompareRequest r,Set<String> excluded){
   var from=location(r.origin(),r.originLatitude(),r.originLongitude()); var to=location(r.destination(),r.destinationLatitude(),r.destinationLongitude());
   if(from.isEmpty()||to.isEmpty()) return empty("UNKNOWN_LOCATION","Select a valid location suggestion before comparing.");
-  var route=routing.route(from.get(),to.get()); if(route.isEmpty()) return empty("NO_ROUTE","No road route was returned by the configured provider. No distance-based fares were fabricated.");
+  var route=routing.route(from.get(),to.get());
+  if(route.isEmpty()) {
+   var mapped=transit(from.get(),to.get());
+   if(!mapped.isEmpty()) return new CompareResponse("TRANSIT_ONLY","Mapped OSM transit relation found. Road distance, schedules, fares and live service are unknown.",List.of(),List.of(),false,"Transit journey found; road-route estimates are unavailable.",null,null,null,"OSM_RELATIONS_NO_SCHEDULE",mapped);
+   return empty("NO_ROUTE","No road route or mapped transit journey was found. No distance-based fares were fabricated.");
+  }
   var verified=route.get().source().equals("WISEWAY_CURATED_ROUTE")?Set.of("BUS","METRO"):Set.<String>of(); var options=new ArrayList<TransportOption>();
   for(var mode:List.of(TransportMode.BUS,TransportMode.METRO,TransportMode.TRAIN,TransportMode.AUTO,TransportMode.CAB)){var fare=fares.calculate(mode,(int)Math.round(route.get().distanceMetres())); if(fare.amount()!=null) options.add(new TransportOption(mode.name().toLowerCase()+"-route",mode,Math.max(1,(int)Math.round(route.get().durationSeconds()/60))+(mode==TransportMode.BUS?8:mode==TransportMode.METRO?4:mode==TransportMode.TRAIN?2:0),fare.amount(),"INR",mode==TransportMode.BUS||mode==TransportMode.TRAIN?1:0,mode==TransportMode.CAB?1:6,"Route-specific estimate for "+from.get().name()+" → "+to.get().name()+"."));}
   var c=r.constraints(); var result=RecommendationEngine.recommend(options,r.preference()==null?PreferenceProfile.BALANCED:r.preference(),new RecommendationEngine.Constraints(c==null?null:c.maxFare(),r.departureAt(),c==null?null:c.arriveBy()),excluded);

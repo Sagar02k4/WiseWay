@@ -17,7 +17,7 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
   private final List<Route> routes;
 
   public OsmTransitRoutingProvider(ObjectMapper mapper,
-      @Value("${wiseway.transit.dataset:backend/data/transit/normalized/ncr-transit.json}") String dataset) {
+      @Value("${wiseway.transit.dataset:data/transit/normalized/ncr-transit.json}") String dataset) {
     this.routes = loadSafely(mapper, Path.of(dataset));
   }
 
@@ -57,7 +57,7 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
         if (stops.size() < 2) continue;
         // The extractor preserves stop order in the route's ordered member-node sequence.
         for (int i=0;i<stops.size();i++) stops.set(i, new Stop(stops.get(i).name, stops.get(i).lat, stops.get(i).lon, i));
-        var geometry = mapper.writeValueAsString(n.path("geometry"));
+        var geometry = mapper.writeValueAsString(Map.of("type", "LineString", "coordinates", n.path("geometry")));
         result.add(new Route(mode, n.path("name").asText("Unnamed mapped route"), stops, geometry));
       }
       return List.copyOf(result);
