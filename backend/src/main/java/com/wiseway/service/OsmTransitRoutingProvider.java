@@ -18,7 +18,7 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
 
   public OsmTransitRoutingProvider(ObjectMapper mapper,
       @Value("${wiseway.transit.dataset:backend/data/transit/normalized/ncr-transit.json}") String dataset) {
-    this.routes = load(mapper, Path.of(dataset));
+    this.routes = loadSafely(mapper, Path.of(dataset));
   }
 
   @Override
@@ -62,6 +62,15 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
       }
       return List.copyOf(result);
     } catch (IOException e) { throw new IllegalStateException("Transit dataset could not be loaded: " + path, e); }
+  }
+
+  private static List<Route> loadSafely(ObjectMapper mapper, Path path) {
+    try {
+      return load(mapper, path);
+    } catch (RuntimeException ex) {
+      // Transit data is optional. Road routing and the rest of the API remain usable.
+      return List.of();
+    }
   }
 
   private record Stop(String name, double lat, double lon, int index) {}
