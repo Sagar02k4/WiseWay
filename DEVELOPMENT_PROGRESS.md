@@ -19,6 +19,8 @@
 
 The three-pass PyOsmium extraction completed in approximately 95 seconds without native `osmium-tool`. The normalized dataset is 17,505,209 bytes and contains 762 mapped route relations, 1,166 stops, and 675 complete route geometries. These are OSM-mapped relations, not proof of live service, schedules, fares, or connected journeys. Transit API integration remains pending.
 
+The dataset audit found 540 route relations with associated mapped stops (2,215 route-stop associations), 675 complete geometries, and 87 incomplete geometries. A conservative `OsmTransitRoutingProvider` now loads complete relations and accepts only direct journeys whose origin and destination are within 1.5 km of ordered stops. It rejects crossing-only routes and does not invent transfers, schedules, fares, or live availability. It is currently a provider seam and still requires API DTO/frontend wiring before transit journeys appear in Compare or Plan B.
+
 ### Remaining work
 
 - Implement direct/one-transfer routing from verified relations and stop relationships.
