@@ -88,6 +88,10 @@ Photon results include a display name, context, latitude and longitude. Use reas
 
 When OSRM is enabled, Compare sends the selected coordinates to OSRM and renders its returned GeoJSON route geometry. The map does not represent live traffic or public-transport availability. Curated demo routes without geometry show a clear unavailable-map state rather than a fabricated straight line.
 
+### Transit-data status
+
+The Delhi Open Transit Data portal publishes GTFS bus data, and Delhi transit-data catalogs also describe static metro datasets. Coverage, freshness, licensing, and route-shape availability must be verified per feed before enabling transit geometry. WiseWay does not currently bundle a GTFS feed or claim verified Bus/Metro/Train geometry for Gurugram or Rohtak; those modes remain illustrative/unknown when no genuine transit provider supplies a route. A future OpenTripPlanner/GTFS adapter should remain behind a `TransitRoutingProvider` abstraction.
+
 ## Test and build
 
 ```powershell
