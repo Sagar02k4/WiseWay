@@ -55,14 +55,25 @@ Open `http://localhost:5173`. Set `VITE_API_URL` if the backend uses a different
 
 The default provider is the local curated demo route catalog. To use a local OSRM instance, configure the backend before starting it:
 
+Use the explicit OSRM development profile:
+
 ```powershell
-$env:WISEWAY_ROUTING_PROVIDER="osrm"
-$env:WISEWAY_OSRM_BASE_URL="http://localhost:5000"
-$env:WISEWAY_ROUTING_TIMEOUT_MS="5000"
-.\mvnw.cmd spring-boot:run
+cd backend
+$env:WISEWAY_OSRM_BASE_URL="https://router.project-osrm.org"
+$env:WISEWAY_ROUTING_TIMEOUT_MS="8000"
+.\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=osrm
 ```
 
-OSRM must be supplied with the map data and profile appropriate for the region. A public demonstration endpoint is suitable only for limited manual testing; it is not a production dependency. WiseWay returns `NO_ROUTE` when OSRM fails or returns no route and does not substitute straight-line or fabricated distance.
+Equivalent environment-only configuration is also supported:
+
+```powershell
+$env:WISEWAY_ROUTING_PROVIDER="osrm"
+$env:WISEWAY_OSRM_BASE_URL="https://router.project-osrm.org"
+```
+
+Curated demo mode remains the default when no profile or provider variable is supplied.
+
+OSRM must be supplied with the map data and profile appropriate for the region. The public demonstration endpoint is suitable only for reasonable-use testing; it is not a guaranteed production dependency. WiseWay returns `NO_ROUTE` when OSRM fails or returns no route and does not substitute straight-line or fabricated distance.
 
 ### Geocoding provider
 
