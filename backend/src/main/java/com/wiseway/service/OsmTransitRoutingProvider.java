@@ -15,17 +15,26 @@ import org.springframework.stereotype.Service;
 public class OsmTransitRoutingProvider implements TransitRoutingProvider {
   private static final double STOP_RADIUS_METRES = 1_500;
   private final List<Route> routes;
+  private final Map<Long, List<Edge>> adjacency;
 
   public OsmTransitRoutingProvider(ObjectMapper mapper,
       @Value("${wiseway.transit.dataset:data/transit/normalized/ncr-transit.json}") String dataset) {
     this.routes = loadSafely(mapper, Path.of(dataset));
+    this.adjacency = buildGraph(routes);
   }
 
   @Override
   public Optional<Itinerary> route(LocationService.Location origin, LocationService.Location destination, Set<TransportMode> modes) {
-    var direct = routes.stream().filter(r -> modes.contains(r.mode)).map(r -> direct(r, origin, destination)).flatMap(Optional::stream).findFirst();
-    if (direct.isPresent()) return direct;
-    return Optional.empty(); // Crossing lines is not treated as a transfer without a shared mapped stop.
+    return journeys(origin, destination, modes).stream().findFirst();
+  }
+
+  @Override
+  public List<Itinerary> journeys(LocationService.Location origin, LocationService.Location destination, Set<TransportMode> modes) {
+    var starts = nearestStops(origin, modes); var ends = nearestStops(destination, modes);
+    if (starts.isEmpty() || ends.isEmpty()) return List.of();
+    var results = new ArrayList<Itinerary>();
+    for (var s : starts) for (var e : ends) results.addAll(search(s.id, e.id, modes));
+    return results.stream().filter(x -> !x.legs().isEmpty()).distinct().limit(6).toList();
   }
 
   public List<LocationService.Location> searchStops(String query) {
@@ -49,6 +58,43 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
     return stops.stream().map(s -> new StopMatch(s, haversine(lat, lon, s.lat, s.lon))).filter(x -> x.distance <= STOP_RADIUS_METRES).min(Comparator.comparingDouble(x -> x.distance));
   }
 
+  private List<Stop> nearestStops(LocationService.Location location, Set<TransportMode> modes) {
+    return routes.stream().filter(r -> modes.contains(r.mode)).flatMap(r -> r.stops.stream())
+        .filter(s -> haversine(location.latitude(), location.longitude(), s.lat, s.lon) <= STOP_RADIUS_METRES)
+        .collect(java.util.stream.Collectors.toMap(Stop::id, s -> s, (a,b) -> a, LinkedHashMap::new)).values().stream().toList();
+  }
+
+  private List<Itinerary> search(long start, long target, Set<TransportMode> modes) {
+    record State(long stop, List<Edge> path, Set<Long> visited, Set<Long> routeIds) {}
+    var queue = new ArrayDeque<State>(); queue.add(new State(start, List.of(), Set.of(start), Set.of()));
+    var out = new ArrayList<Itinerary>();
+    while (!queue.isEmpty() && out.size() < 4) {
+      var state = queue.removeFirst();
+      if (state.stop == target && !state.path.isEmpty()) { out.add(toItinerary(state.path)); continue; }
+      if (state.path.size() >= 24 || state.routeIds.size() > 3) continue;
+      for (var edge : adjacency.getOrDefault(state.stop, List.of())) {
+        if (!modes.contains(edge.mode) || state.visited.contains(edge.toId)) continue;
+        var visited = new HashSet<>(state.visited); visited.add(edge.toId);
+        var routesUsed = new HashSet<>(state.routeIds); routesUsed.add(edge.relationId);
+        queue.addLast(new State(edge.toId, append(state.path, edge), visited, routesUsed));
+      }
+    }
+    return out.stream().distinct().toList();
+  }
+
+  private List<Edge> append(List<Edge> path, Edge edge) { var copy = new ArrayList<>(path); copy.add(edge); return List.copyOf(copy); }
+
+  private Itinerary toItinerary(List<Edge> edges) {
+    var legs = new ArrayList<Leg>(); Edge first = edges.get(0); var mode = first.mode; var name = first.routeName; var from = first.from; var to = first.to; var geometries = new ArrayList<List<Double>>(); geometries.addAll(first.coordinates);
+    for (int i=1;i<edges.size();i++) { var e=edges.get(i); if(e.mode==mode && e.relationId==first.relationId) { to=e.to; geometries.addAll(e.coordinates.subList(Math.min(1,e.coordinates.size()),e.coordinates.size())); } else { legs.add(new Leg(mode,name,from.name,to.name,estimateSeconds(geometries),geo(geometries))); mode=e.mode; name=e.routeName; from=e.from; geometries=new ArrayList<>(e.coordinates); to=e.to; } }
+    legs.add(new Leg(mode,name,from.name,to.name,estimateSeconds(geometries),geo(geometries)));
+    return new Itinerary(List.copyOf(legs), "OSM_MAPPED_NETWORK_NO_SCHEDULE", Instant.now());
+  }
+  private int estimateSeconds(List<List<Double>> points) { double metres=0; for(int i=1;i<points.size();i++) metres+=haversine(points.get(i-1).get(1),points.get(i-1).get(0),points.get(i).get(1),points.get(i).get(0)); return (int)Math.max(60, Math.round(metres/8.0)); }
+  private String geo(List<List<Double>> points) { try{return new ObjectMapper().writeValueAsString(Map.of("type","LineString","coordinates",points));}catch(IOException e){return "";} }
+
+  private Map<Long,List<Edge>> buildGraph(List<Route> input) { var graph=new HashMap<Long,List<Edge>>(); for(var r:input) for(int i=0;i<r.stops.size()-1;i++){var a=r.stops.get(i);var b=r.stops.get(i+1);var coords=r.segment(a,b);if(coords.size()<2)continue;graph.computeIfAbsent(a.id,k->new ArrayList<>()).add(new Edge(a.id,b.id,r.mode,r.name,r.relationId,a,b,coords));} return graph; }
+
   private static double haversine(double aLat, double aLon, double bLat, double bLon) {
     var p = Math.PI / 180; var a = .5 - Math.cos((bLat-aLat)*p)/2 + Math.cos(aLat*p)*Math.cos(bLat*p)*(1-Math.cos((bLon-aLon)*p))/2;
     return 12_742_000 * Math.asin(Math.sqrt(a));
@@ -66,7 +112,7 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
         // The extractor preserves stop order in the route's ordered member-node sequence.
         for (int i=0;i<stops.size();i++) stops.set(i, new Stop(stops.get(i).id, stops.get(i).name, stops.get(i).lat, stops.get(i).lon, stops.get(i).mode, i));
         var coordinates = new ArrayList<List<Double>>(); n.path("geometry").forEach(p -> coordinates.add(List.of(p.get(0).asDouble(), p.get(1).asDouble())));
-        result.add(new Route(mode, n.path("name").asText("Unnamed mapped route"), stops, coordinates));
+        result.add(new Route(n.path("id").asLong(), mode, n.path("name").asText("Unnamed mapped route"), stops, coordinates));
       }
       return List.copyOf(result);
     } catch (IOException e) { throw new IllegalStateException("Transit dataset could not be loaded: " + path, e); }
@@ -83,7 +129,7 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
 
   private record Stop(long id, String name, double lat, double lon, String mode, int index) {}
   private record StopMatch(Stop stop, double distance) { int index(){ return stop.index; } String name(){ return stop.name; } }
-  private record Route(TransportMode mode, String name, List<Stop> stops, List<List<Double>> coordinates) {
+  private record Route(long relationId, TransportMode mode, String name, List<Stop> stops, List<List<Double>> coordinates) {
     String geometryBetween(Stop from, Stop to) {
       int start = nearestCoordinate(from), end = nearestCoordinate(to);
       if (start < 0 || end < 0 || start >= end) return "";
@@ -97,5 +143,7 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
       for (int i=0;i<coordinates.size();i++) { var p=coordinates.get(i); var d=haversine(stop.lat,stop.lon,p.get(1),p.get(0)); if(d<distance){distance=d;best=i;} }
       return distance <= STOP_RADIUS_METRES ? best : -1;
     }
+    List<List<Double>> segment(Stop from, Stop to) { int a=nearestCoordinate(from), b=nearestCoordinate(to); if(a<0||b<=a)return List.of(); return List.copyOf(coordinates.subList(a,b+1)); }
   }
+  private record Edge(long fromId,long toId,TransportMode mode,String routeName,long relationId,Stop from,Stop to,List<List<Double>> coordinates) {}
 }
