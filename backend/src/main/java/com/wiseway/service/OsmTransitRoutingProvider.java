@@ -10,7 +10,8 @@ import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-/** Offline OSM relation matcher. It exposes only mapped stop-to-stop journeys; it is not a schedule/feed provider. */
+/** Offline OSM relation matcher. It combines mapped transit relations with evidence-based stop walking links.
+ * Schedules are deliberately not inferred; all transit times remain estimates. */
 @Service
 public class OsmTransitRoutingProvider implements TransitRoutingProvider {
   private static final double STOP_RADIUS_METRES = 1_500;
@@ -33,8 +34,14 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
     var starts = nearestStops(origin, modes); var ends = nearestStops(destination, modes);
     if (starts.isEmpty() || ends.isEmpty()) return List.of();
     var results = new ArrayList<Itinerary>();
-    for (var s : starts) for (var e : ends) results.addAll(search(s.id, e.id, modes));
-    return results.stream().filter(x -> !x.legs().isEmpty()).distinct().limit(6).toList();
+    for (var s : starts) for (var e : ends) for (var found : search(s.stop.id, e.stop.id, modes)) {
+      var legs = new ArrayList<Leg>();
+      if (s.distance() > 25) legs.add(walk(origin, s.stop(), s.distance()));
+      legs.addAll(found.legs());
+      if (e.distance() > 25) legs.add(walk(e.stop(), destination, e.distance()));
+      results.add(new Itinerary(List.copyOf(legs), "OSM_MAPPED_NETWORK_WITH_WALK_CONNECTORS", Instant.now()));
+    }
+    return results.stream().filter(x -> !x.legs().isEmpty()).distinct().limit(12).toList();
   }
 
   public List<LocationService.Location> searchStops(String query) {
@@ -58,14 +65,14 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
     return stops.stream().map(s -> new StopMatch(s, haversine(lat, lon, s.lat, s.lon))).filter(x -> x.distance <= STOP_RADIUS_METRES).min(Comparator.comparingDouble(x -> x.distance));
   }
 
-  private List<Stop> nearestStops(LocationService.Location location, Set<TransportMode> modes) {
+  private List<StopMatch> nearestStops(LocationService.Location location, Set<TransportMode> modes) {
     var candidates = routes.stream().filter(r -> modes.contains(r.mode)).flatMap(r -> r.stops.stream())
         .collect(java.util.stream.Collectors.toMap(Stop::id, s -> s, (a,b) -> a, LinkedHashMap::new)).values().stream()
         .map(s -> new StopMatch(s, haversine(location.latitude(), location.longitude(), s.lat, s.lon)))
         .filter(x -> x.distance <= STOP_RADIUS_METRES).sorted(Comparator.comparingDouble(x -> x.distance)).toList();
     if (candidates.isEmpty()) return List.of();
     var cutoff = Math.min(STOP_RADIUS_METRES, candidates.get(0).distance + 100);
-    return candidates.stream().filter(x -> x.distance <= cutoff).map(StopMatch::stop).toList();
+    return candidates.stream().filter(x -> x.distance <= cutoff).toList();
   }
 
   private List<Itinerary> search(long start, long target, Set<TransportMode> modes) {
@@ -86,6 +93,10 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
     return out.stream().distinct().toList();
   }
 
+  private Leg walk(LocationService.Location from, Stop to, double metres) { return new Leg(TransportMode.WALK, "Approximate walking connection", from.name(), to.name, walkingSeconds(metres), geo(List.of(List.of(from.longitude(),from.latitude()),List.of(to.lon,to.lat)))); }
+  private Leg walk(Stop from, LocationService.Location to, double metres) { return new Leg(TransportMode.WALK, "Approximate walking connection", from.name, to.name(), walkingSeconds(metres), geo(List.of(List.of(from.lon,from.lat),List.of(to.longitude(),to.latitude())))); }
+  private int walkingSeconds(double metres) { return (int)Math.max(30, Math.round(metres / 1.25)); }
+
   private List<Edge> append(List<Edge> path, Edge edge) { var copy = new ArrayList<>(path); copy.add(edge); return List.copyOf(copy); }
 
   private Itinerary toItinerary(List<Edge> edges) {
@@ -97,7 +108,17 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
   private int estimateSeconds(List<List<Double>> points) { double metres=0; for(int i=1;i<points.size();i++) metres+=haversine(points.get(i-1).get(1),points.get(i-1).get(0),points.get(i).get(1),points.get(i).get(0)); return (int)Math.max(60, Math.round(metres/8.0)); }
   private String geo(List<List<Double>> points) { try{return new ObjectMapper().writeValueAsString(Map.of("type","LineString","coordinates",points));}catch(IOException e){return "";} }
 
-  private Map<Long,List<Edge>> buildGraph(List<Route> input) { var graph=new HashMap<Long,List<Edge>>(); for(var r:input) for(int i=0;i<r.stops.size()-1;i++){var a=r.stops.get(i);var b=r.stops.get(i+1);var coords=r.segment(a,b);if(coords.size()<2)continue;graph.computeIfAbsent(a.id,k->new ArrayList<>()).add(new Edge(a.id,b.id,r.mode,r.name,r.relationId,a,b,coords));} return graph; }
+  private Map<Long,List<Edge>> buildGraph(List<Route> input) {
+    var graph=new HashMap<Long,List<Edge>>();
+    var stops=new LinkedHashMap<Long,Stop>();
+    for(var r:input) for(var s:r.stops) stops.putIfAbsent(s.id,s);
+    for (var r:input) for(int i=0;i<r.stops.size()-1;i++) { var a=r.stops.get(i); var b=r.stops.get(i+1); var coords=r.segment(a,b); if(coords.size()<2) continue; graph.computeIfAbsent(a.id,k->new ArrayList<>()).add(new Edge(a.id,b.id,r.mode,r.name,r.relationId,a,b,coords)); }
+    // Shared physical stops and nearby stations are valid transfer evidence. The 900m cap
+    // prevents arbitrary network jumps while allowing bus-to-metro interchanges.
+    var all=new ArrayList<>(stops.values());
+    for(var a:all) for(var b:all) if(a.id!=b.id && !a.mode.equals(b.mode)) { var d=haversine(a.lat,a.lon,b.lat,b.lon); if(d<=900) graph.computeIfAbsent(a.id,k->new ArrayList<>()).add(new Edge(a.id,b.id,TransportMode.WALK,"Validated station transfer",0,a,b,List.of())); }
+    return graph;
+  }
 
   private static double haversine(double aLat, double aLon, double bLat, double bLon) {
     var p = Math.PI / 180; var a = .5 - Math.cos((bLat-aLat)*p)/2 + Math.cos(aLat*p)*Math.cos(bLat*p)*(1-Math.cos((bLon-aLon)*p))/2;

@@ -8,6 +8,8 @@ public class LocationService {
   public record Location(String id, String name, String context, double latitude, double longitude) {}
   private final List<Location> locations = List.of(
       new Location("sector-14", "Sector 14", "Gurugram, Haryana", 28.4595, 77.0266),
+      new Location("sector-17", "Sector 17", "Gurugram, Haryana", 28.4758035, 77.0607773),
+      new Location("sector-51", "Sector 51", "Gurugram, Haryana", 28.4287011, 77.0666877),
       new Location("main-campus", "Main Campus", "Gurugram, Haryana", 28.4456, 77.0420),
       new Location("old-town", "Old Town", "Gurugram, Haryana", 28.4646, 77.0299),
       new Location("airport", "Airport", "New Delhi", 28.5562, 77.1000));
