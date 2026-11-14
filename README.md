@@ -39,7 +39,7 @@ cd backend
 
 Alternatively set `MAVEN_HOME` to your Apache Maven directory and run `mvnw.cmd`. Do not use the Python `mvn.exe` shim.
 
-The API starts on `http://localhost:8080`; SQLite is created at `backend/data/wiseway.db`.
+The API starts on `http://localhost:8080`; SQLite is created at `backend/data/wiseway.db`. OSRM and Photon are enabled by default for general road routing and place search; the app still combines their results with the curated catalog and imported OSM transit stops.
 
 ## Run the frontend
 
@@ -53,7 +53,7 @@ Open `http://localhost:5173`. Set `VITE_API_URL` if the backend uses a different
 
 ### Routing provider
 
-The default provider is the local curated demo route catalog. To use a local OSRM instance, configure the backend before starting it:
+The default provider is OSRM for general road routing. To use a local OSRM instance, configure the backend before starting it:
 
 Use the explicit OSRM development profile:
 
@@ -64,11 +64,14 @@ $env:WISEWAY_ROUTING_TIMEOUT_MS="8000"
 .\mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=osrm
 ```
 
-Equivalent environment-only configuration is also supported:
+Equivalent environment-only configuration is also supported. Curated demo mode remains available explicitly:
 
 ```powershell
 $env:WISEWAY_ROUTING_PROVIDER="osrm"
 $env:WISEWAY_OSRM_BASE_URL="https://router.project-osrm.org"
+
+# Optional curated-only demo mode
+$env:WISEWAY_ROUTING_PROVIDER="curated"
 ```
 
 Curated demo mode remains the default when no profile or provider variable is supplied.
