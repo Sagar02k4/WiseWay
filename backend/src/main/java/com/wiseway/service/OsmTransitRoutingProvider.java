@@ -59,9 +59,13 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
   }
 
   private List<Stop> nearestStops(LocationService.Location location, Set<TransportMode> modes) {
-    return routes.stream().filter(r -> modes.contains(r.mode)).flatMap(r -> r.stops.stream())
-        .filter(s -> haversine(location.latitude(), location.longitude(), s.lat, s.lon) <= STOP_RADIUS_METRES)
-        .collect(java.util.stream.Collectors.toMap(Stop::id, s -> s, (a,b) -> a, LinkedHashMap::new)).values().stream().toList();
+    var candidates = routes.stream().filter(r -> modes.contains(r.mode)).flatMap(r -> r.stops.stream())
+        .collect(java.util.stream.Collectors.toMap(Stop::id, s -> s, (a,b) -> a, LinkedHashMap::new)).values().stream()
+        .map(s -> new StopMatch(s, haversine(location.latitude(), location.longitude(), s.lat, s.lon)))
+        .filter(x -> x.distance <= STOP_RADIUS_METRES).sorted(Comparator.comparingDouble(x -> x.distance)).toList();
+    if (candidates.isEmpty()) return List.of();
+    var cutoff = Math.min(STOP_RADIUS_METRES, candidates.get(0).distance + 100);
+    return candidates.stream().filter(x -> x.distance <= cutoff).map(StopMatch::stop).toList();
   }
 
   private List<Itinerary> search(long start, long target, Set<TransportMode> modes) {
@@ -85,8 +89,8 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
   private List<Edge> append(List<Edge> path, Edge edge) { var copy = new ArrayList<>(path); copy.add(edge); return List.copyOf(copy); }
 
   private Itinerary toItinerary(List<Edge> edges) {
-    var legs = new ArrayList<Leg>(); Edge first = edges.get(0); var mode = first.mode; var name = first.routeName; var from = first.from; var to = first.to; var geometries = new ArrayList<List<Double>>(); geometries.addAll(first.coordinates);
-    for (int i=1;i<edges.size();i++) { var e=edges.get(i); if(e.mode==mode && e.relationId==first.relationId) { to=e.to; geometries.addAll(e.coordinates.subList(Math.min(1,e.coordinates.size()),e.coordinates.size())); } else { legs.add(new Leg(mode,name,from.name,to.name,estimateSeconds(geometries),geo(geometries))); mode=e.mode; name=e.routeName; from=e.from; geometries=new ArrayList<>(e.coordinates); to=e.to; } }
+    var legs = new ArrayList<Leg>(); Edge first = edges.get(0); var mode = first.mode; var name = first.routeName; var relationId=first.relationId; var from = first.from; var to = first.to; var geometries = new ArrayList<List<Double>>(); geometries.addAll(first.coordinates);
+    for (int i=1;i<edges.size();i++) { var e=edges.get(i); if(e.mode==mode && e.relationId==relationId) { to=e.to; geometries.addAll(e.coordinates.subList(Math.min(1,e.coordinates.size()),e.coordinates.size())); } else { legs.add(new Leg(mode,name,from.name,to.name,estimateSeconds(geometries),geo(geometries))); mode=e.mode; name=e.routeName; relationId=e.relationId; from=e.from; geometries=new ArrayList<>(e.coordinates); to=e.to; } }
     legs.add(new Leg(mode,name,from.name,to.name,estimateSeconds(geometries),geo(geometries)));
     return new Itinerary(List.copyOf(legs), "OSM_MAPPED_NETWORK_NO_SCHEDULE", Instant.now());
   }
