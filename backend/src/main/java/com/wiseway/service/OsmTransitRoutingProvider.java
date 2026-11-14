@@ -40,7 +40,7 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
     var from = nearest(route.stops, origin.latitude(), origin.longitude());
     var to = nearest(route.stops, destination.latitude(), destination.longitude());
     if (from.isEmpty() || to.isEmpty() || from.get().index() >= to.get().index()) return Optional.empty();
-    var geometry = route.geometryBetween(from.get().index(), to.get().index());
+    var geometry = route.geometryBetween(from.get().stop(), to.get().stop());
     if (geometry.isEmpty()) return Optional.empty();
     return Optional.of(new Itinerary(List.of(new Leg(route.mode, route.name, from.get().name(), to.get().name(), 0, geometry)), "OSM_RELATIONS_NO_SCHEDULE", Instant.now()));
   }
@@ -65,8 +65,8 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
         if (stops.size() < 2) continue;
         // The extractor preserves stop order in the route's ordered member-node sequence.
         for (int i=0;i<stops.size();i++) stops.set(i, new Stop(stops.get(i).id, stops.get(i).name, stops.get(i).lat, stops.get(i).lon, stops.get(i).mode, i));
-        var geometry = mapper.writeValueAsString(Map.of("type", "LineString", "coordinates", n.path("geometry")));
-        result.add(new Route(mode, n.path("name").asText("Unnamed mapped route"), stops, geometry));
+        var coordinates = new ArrayList<List<Double>>(); n.path("geometry").forEach(p -> coordinates.add(List.of(p.get(0).asDouble(), p.get(1).asDouble())));
+        result.add(new Route(mode, n.path("name").asText("Unnamed mapped route"), stops, coordinates));
       }
       return List.copyOf(result);
     } catch (IOException e) { throw new IllegalStateException("Transit dataset could not be loaded: " + path, e); }
@@ -83,7 +83,19 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
 
   private record Stop(long id, String name, double lat, double lon, String mode, int index) {}
   private record StopMatch(Stop stop, double distance) { int index(){ return stop.index; } String name(){ return stop.name; } }
-  private record Route(TransportMode mode, String name, List<Stop> stops, String geometry) {
-    String geometryBetween(int from, int to) { return geometry; }
+  private record Route(TransportMode mode, String name, List<Stop> stops, List<List<Double>> coordinates) {
+    String geometryBetween(Stop from, Stop to) {
+      int start = nearestCoordinate(from), end = nearestCoordinate(to);
+      if (start < 0 || end < 0 || start >= end) return "";
+      var segment = coordinates.subList(start, end + 1);
+      if (segment.size() < 2) return "";
+      try { return new ObjectMapper().writeValueAsString(Map.of("type", "LineString", "coordinates", segment)); }
+      catch (IOException e) { return ""; }
+    }
+    private int nearestCoordinate(Stop stop) {
+      var best = -1; var distance = Double.MAX_VALUE;
+      for (int i=0;i<coordinates.size();i++) { var p=coordinates.get(i); var d=haversine(stop.lat,stop.lon,p.get(1),p.get(0)); if(d<distance){distance=d;best=i;} }
+      return distance <= STOP_RADIUS_METRES ? best : -1;
+    }
   }
 }
