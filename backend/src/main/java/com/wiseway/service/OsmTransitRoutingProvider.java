@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class OsmTransitRoutingProvider implements TransitRoutingProvider {
   private static final double STOP_RADIUS_METRES = 1_500;
+  private static final double METRO_ACCESS_RADIUS_METRES = 10_000;
   private final List<Route> routes;
   private final Map<Long, List<Edge>> adjacency;
 
@@ -66,12 +67,13 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
   }
 
   private List<StopMatch> nearestStops(LocationService.Location location, Set<TransportMode> modes) {
+    var accessRadius = modes.contains(TransportMode.METRO) ? METRO_ACCESS_RADIUS_METRES : STOP_RADIUS_METRES;
     var candidates = routes.stream().filter(r -> modes.contains(r.mode)).flatMap(r -> r.stops.stream())
         .collect(java.util.stream.Collectors.toMap(Stop::id, s -> s, (a,b) -> a, LinkedHashMap::new)).values().stream()
         .map(s -> new StopMatch(s, haversine(location.latitude(), location.longitude(), s.lat, s.lon)))
-        .filter(x -> x.distance <= STOP_RADIUS_METRES).sorted(Comparator.comparingDouble(x -> x.distance)).toList();
+        .filter(x -> x.distance <= accessRadius).sorted(Comparator.comparingDouble(x -> x.distance)).toList();
     if (candidates.isEmpty()) return List.of();
-    var cutoff = Math.min(STOP_RADIUS_METRES, candidates.get(0).distance + 100);
+    var cutoff = Math.min(accessRadius, candidates.get(0).distance + 100);
     return candidates.stream().filter(x -> x.distance <= cutoff).toList();
   }
 
@@ -112,11 +114,20 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
     var graph=new HashMap<Long,List<Edge>>();
     var stops=new LinkedHashMap<Long,Stop>();
     for(var r:input) for(var s:r.stops) stops.putIfAbsent(s.id,s);
-    for (var r:input) for(int i=0;i<r.stops.size()-1;i++) { var a=r.stops.get(i); var b=r.stops.get(i+1); var coords=r.segment(a,b); if(coords.size()<2) continue; graph.computeIfAbsent(a.id,k->new ArrayList<>()).add(new Edge(a.id,b.id,r.mode,r.name,r.relationId,a,b,coords)); }
+    for (var r:input) for(int i=0;i<r.stops.size()-1;i++) { var a=r.stops.get(i); var b=r.stops.get(i+1); var coords=r.segment(a,b); if(coords.size()<2) continue; graph.computeIfAbsent(a.id,k->new ArrayList<>()).add(new Edge(a.id,b.id,r.mode,r.name,r.relationId,a,b,coords)); if(r.mode==TransportMode.METRO) { var reverse=new ArrayList<>(coords); Collections.reverse(reverse); graph.computeIfAbsent(b.id,k->new ArrayList<>()).add(new Edge(b.id,a.id,r.mode,r.name,r.relationId,b,a,List.copyOf(reverse))); } }
     // Shared physical stops and nearby stations are valid transfer evidence. The 900m cap
     // prevents arbitrary network jumps while allowing bus-to-metro interchanges.
     var all=new ArrayList<>(stops.values());
-    for(var a:all) for(var b:all) if(a.id!=b.id && !a.mode.equals(b.mode)) { var d=haversine(a.lat,a.lon,b.lat,b.lon); if(d<=900) graph.computeIfAbsent(a.id,k->new ArrayList<>()).add(new Edge(a.id,b.id,TransportMode.WALK,"Validated station transfer",0,a,b,List.of())); }
+    for(var a:all) for(var b:all) if(a.id!=b.id) {
+      var d=haversine(a.lat,a.lon,b.lat,b.lon);
+      var sameStation=a.mode.equals(b.mode) && a.name.equalsIgnoreCase(b.name);
+      var crossMode=!a.mode.equals(b.mode);
+      if((sameStation && d<=300) || (crossMode && d<=900)) {
+        var transferName=sameStation?"Station interchange: "+a.name:"Validated station transfer";
+        var coords=List.of(List.of(a.lon,a.lat),List.of(b.lon,b.lat));
+        graph.computeIfAbsent(a.id,k->new ArrayList<>()).add(new Edge(a.id,b.id,TransportMode.WALK,transferName,0,a,b,coords));
+      }
+    }
     return graph;
   }
 
@@ -168,7 +179,12 @@ public class OsmTransitRoutingProvider implements TransitRoutingProvider {
       for (int i=0;i<coordinates.size();i++) { var p=coordinates.get(i); var d=haversine(stop.lat,stop.lon,p.get(1),p.get(0)); if(d<distance){distance=d;best=i;} }
       return distance <= STOP_RADIUS_METRES ? best : -1;
     }
-    List<List<Double>> segment(Stop from, Stop to) { int a=nearestCoordinate(from), b=nearestCoordinate(to); if(a<0||b<=a)return List.of(); return List.copyOf(coordinates.subList(a,b+1)); }
+    List<List<Double>> segment(Stop from, Stop to) {
+      int a=nearestCoordinate(from), b=nearestCoordinate(to); if(a<0||b<0||a==b)return List.of();
+      var slice=new ArrayList<>(coordinates.subList(Math.min(a,b),Math.max(a,b)+1));
+      if(b<a) Collections.reverse(slice);
+      return List.copyOf(slice);
+    }
   }
   private record Edge(long fromId,long toId,TransportMode mode,String routeName,long relationId,Stop from,Stop to,List<List<Double>> coordinates) {}
 }
